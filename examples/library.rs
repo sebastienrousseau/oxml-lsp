@@ -15,7 +15,8 @@
 
 use oxml_lsp::{Severity, analyse};
 
-const BROKEN: &str = "<config>\n  <name>ok</name>\n  <port>8080</hostname>\n</config>";
+const BROKEN: &str =
+    "<config>\n  <name>ok</name>\n  <port>8080</hostname>\n</config>";
 
 fn main() {
     println!("== a well-formed document ==");
@@ -40,7 +41,10 @@ fn main() {
         println!("  message  : {}", d.message);
 
         assert_eq!(d.severity, Severity::Error);
-        assert_eq!(d.code, "not-well-formed", "the code is stable; match on it");
+        assert_eq!(
+            d.code, "not-well-formed",
+            "the code is stable; match on it"
+        );
         // Zero-based, as LSP requires. The command-line front end adds
         // one before printing, because a person counts from one.
         assert_eq!(d.start.line, 2, "the third line");
