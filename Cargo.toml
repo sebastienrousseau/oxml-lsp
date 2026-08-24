@@ -4,7 +4,7 @@ version = "0.0.3"
 edition = "2024"
 rust-version = "1.86.0"
 license = "MIT OR Apache-2.0"
-description = "Language server for XML documents, powered by oxml"
+description = "XML diagnostics engine and linter, powered by oxml (LSP transport not yet implemented)"
 repository = "https://github.com/sebastienrousseau/oxml-lsp"
 homepage = "https://github.com/sebastienrousseau/oxml-lsp"
 documentation = "https://docs.rs/oxml-lsp"
@@ -31,3 +31,7 @@ unused_results = "warn"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+
+[[example]]
+name = "library"
+path = "examples/library.rs"
