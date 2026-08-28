@@ -211,6 +211,7 @@ README fail CI when they stop being true.
 |---|---|
 | [`lint.sh`](examples/lint.sh) | Files, standard input, exit codes |
 | [`library.rs`](examples/library.rs) | `analyse()` and every field of a `Diagnostic` |
+| [`lint_a_document.rs`](examples/lint_a_document.rs) | What an editor integration calls: lint, then read the diagnostics |
 
 ## When not to use oxml-lsp
 
@@ -278,6 +279,7 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 ./examples/lint.sh
 cargo run --example library
+cargo run --example lint_a_document
 ```
 
 ## Security
