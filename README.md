@@ -87,7 +87,7 @@ As a library:
 
 ```toml
 [dependencies]
-oxml-lsp = "0.0.6"
+oxml-lsp = "0.0.7"
 ```
 
 ## Quick Start

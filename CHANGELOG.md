@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-08-28
+
+### Added
+
+- **Benchmarks.** `analyse()` runs on every keystroke in an editor, so
+  the figure that matters is latency on a small buffer rather than
+  throughput on a large file. The benchmark earned its place
+  immediately: it is what found `analyse()` being quadratic in the
+  number of attributes, which cost 1,088 ms on a document that now
+  takes 9.5.
+
+- A **gate script** (`./scripts/gate.sh`) running everything CI runs,
+  and a **publish script** running the same checks a release does.
+
+- An **Examples** job in CI. `examples/lint.sh` asserts its output and
+  says so in its own header, and the README said the invocations in it
+  "fail CI when they stop being true" -- but nothing ran them.
+
+### Changed
+
+- Built on oxml 0.0.7, which reads a document from any `BufRead`. The
+  suite ships one version number across all six crates.
+
+- The README now follows the same shape as the rest of the suite, and
+  gained the Benchmarks, Ecosystem comparison, Documentation and
+  Acknowledgements sections it lacked. The comparison says plainly
+  that `lemminx` is what to use if you want a working XML language
+  server today.
+
+### Removed
+
+- `criterion` from dev-dependencies. Nothing referenced it -- the
+  benchmark is `harness = false` and times with `Instant` -- and it
+  cost about a minute of compilation on every `cargo bench`.
+
 ## [0.0.6] - 2026-08-26
 
 ### Changed
