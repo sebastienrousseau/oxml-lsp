@@ -35,6 +35,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
 
+  examples:
+    name: Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # examples/lint.sh asserts its output rather than printing it,
+      # and says so in its own header -- but nothing ran it. Two
+      # sibling crates had the same claim and the same gap, and in one
+      # of them two assertions had been failing against the published
+      # oxml for a release before anyone looked.
+      - run: cargo build --release
+      - name: The shell example, which asserts its own output
+        run: OXML_LSP="$PWD/target/release/oxml-lsp" ./examples/lint.sh
+      - name: The library examples
+        run: |
+          cargo run --example library
+          cargo run --example lint_a_document
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
