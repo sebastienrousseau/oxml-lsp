@@ -30,7 +30,7 @@ fn analyse_stays_linear_in_document_size() {
 
     let mut doc = String::from("<config>\n");
     for i in 0..5_000 {
-        let _ = write!(doc, "  <entry id=\"e{i}\"><n>{i}</n></entry>\n");
+        let _ = writeln!(doc, "  <entry id=\"e{i}\"><n>{i}</n></entry>");
     }
     doc.push_str("</config>\n");
 
