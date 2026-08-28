@@ -34,20 +34,35 @@
 
 ## Contents
 
-- [What it does today](#what-it-does-today)
-- [Install](#install)
-- [Quick Start](#quick-start)
-- [The oxml ecosystem](#the-oxml-ecosystem)
-- [Library API](#library-api)
-- [Diagnostics](#diagnostics)
-- [Exit status](#exit-status)
-- [Design](#design)
-- [Roadmap](#roadmap)
-- [Examples](#examples)
+**Getting started**
+
+- [What it does today](#what-it-does-today) — a linter and a library, not yet a language server
+- [Install](#install) — Cargo, from source
+- [Quick Start](#quick-start) — lint a file in one line
+
+**The oxml ecosystem**
+
+- [The oxml ecosystem](#the-oxml-ecosystem) — six crates, one version
+
+**Reference**
+
+- [Library API](#library-api) — `analyse()` and `Diagnostic`
+- [Diagnostics](#diagnostics) — what is reported, and at what severity
+- [Exit status](#exit-status) — and why it matters in a pipeline
+- [Design](#design) — positions, severities, and what is deliberately absent
+- [Roadmap](#roadmap) — what the LSP transport needs
+- [Ecosystem comparison](#ecosystem-comparison) — and when to use `lemminx` instead
+- [Benchmarks](#benchmarks) — latency per document, which is what an editor feels
+
+**Practical**
+
+- [Examples](#examples) — the linter and the library
 - [When not to use oxml-lsp](#when-not-to-use-oxml-lsp)
 - [FAQ](#faq)
 - [Development](#development)
 - [Security](#security)
+- [Documentation](#documentation)
+- [Acknowledgements](#acknowledgements)
 - [License](#license)
 
 ---
@@ -202,6 +217,49 @@ In the order it makes sense to build:
 Steps 3 and 4 are why the analysis is a library: they add diagnostic
 sources, not a new front end.
 
+## Ecosystem comparison
+
+| | Language | Diagnostics | Schema validation | LSP transport |
+|---|---|---|---|---|
+| **`oxml-lsp`** | Rust, no `unsafe` | ✅ well-formedness, duplicate attributes, empty elements | ✗ — use `oxml-cli validate` or `xmlschema` | ✗ **not yet** |
+| [`lemminx`](https://github.com/eclipse/lemminx) | Java | ✅ | ✅ XSD and DTD | ✅ |
+| [`vscode-xml`](https://github.com/redhat-developer/vscode-xml) | Java (`lemminx` underneath) | ✅ | ✅ | ✅ |
+
+The honest summary: if you want a working XML language server today,
+use `lemminx`. This crate is a linter and a library with a language
+server's name, and [Roadmap](#roadmap) says what the transport still
+needs. What it offers meanwhile is a Rust dependency with no JVM, no
+`unsafe`, and a linting pass fast enough to run on every keystroke —
+see [Benchmarks](#benchmarks).
+
+## Benchmarks
+
+```bash
+cargo bench --bench analyse
+```
+
+An editor calls `analyse()` on every keystroke, so the figure that
+matters is not throughput on a large file but **latency on a small
+one**. A language server that takes 20 ms to lint a 4 KB buffer feels
+slow in a way that a batch parser doing the same work does not.
+
+| Document | Time |
+|---|---:|
+| small, 10 entries | 0.017 ms |
+| editor buffer, 200 entries (18 KB) | 0.31 ms |
+| large, 5,000 entries (480 KB) | 9.2 ms |
+| mid-edit, unclosed tag | 0.24 ms |
+| not well-formed | 0.002 ms |
+
+From one run on an Apple Silicon laptop that was **not** idle. These
+describe the machine as much as the code; compare runs, not numbers.
+See [oxml's BENCHMARKS.md](https://github.com/sebastienrousseau/oxml/blob/main/doc/BENCHMARKS.md)
+for the method and the conditions a figure has to carry.
+
+The benchmark earned its place: it is what found `analyse()` being
+quadratic in the number of attributes, which cost 1,088 ms on a
+document that now takes 9.5.
+
 ## Examples
 
 [`examples/`](examples/) asserts its output, so the invocations in this
@@ -275,12 +333,30 @@ any editor that runs a linter on save.
 ## Development
 
 ```bash
-cargo test
+./scripts/gate.sh
+```
+
+That runs everything CI runs, in the order that fails fastest: format,
+clippy, tests, rustdoc, the `#![forbid(unsafe_code)]` check, the
+examples, the 95% coverage floor and an MSRV build. It pins the
+toolchain rather than trusting `rust-toolchain.toml`, because a
+`RUSTUP_TOOLCHAIN` in the environment silently overrides that file and
+a lint that exists in one release and not another then makes a green
+local run and a red CI one.
+
+The individual steps, if you want them one at a time:
+
+```bash
+cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
-./examples/lint.sh
+cargo fmt --all --check
+cargo bench --bench analyse
+OXML_LSP="$PWD/target/release/oxml-lsp" ./examples/lint.sh
 cargo run --example library
 cargo run --example lint_a_document
 ```
+
+CI runs the same set on Linux, macOS and Windows.
 
 ## Security
 
@@ -290,6 +366,29 @@ recursion bounded. `#![forbid(unsafe_code)]`.
 
 See
 <https://github.com/sebastienrousseau/oxml/blob/main/doc/SECURITY-MODEL.md>.
+
+## Documentation
+
+- [API documentation](https://docs.rs/oxml-lsp)
+- [DIAGNOSTICS.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/doc/DIAGNOSTICS.md)
+- [POSITIONS.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/doc/POSITIONS.md)
+- [ROADMAP.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/doc/ROADMAP.md)
+- [CHANGELOG.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/CHANGELOG.md)
+- [CONTRIBUTING.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/CONTRIBUTING.md)
+- [SECURITY.md](https://github.com/sebastienrousseau/oxml-lsp/blob/main/SECURITY.md)
+
+## Acknowledgements
+
+`oxml-lsp` exists because of work that came before it:
+
+- **[lemminx](https://github.com/eclipse/lemminx)** — the XML language
+  server this one is measured against, and the reference for what an
+  editor integration should offer.
+- **[Microsoft](https://microsoft.github.io/language-server-protocol/)**
+  — for the Language Server Protocol specification.
+- **[lxml](https://lxml.de/)** and
+  **[libxml2](https://gitlab.gnome.org/GNOME/libxml2)** — decades of
+  hard-won correctness, and the yardstick for behaviour.
 
 ## License
 
