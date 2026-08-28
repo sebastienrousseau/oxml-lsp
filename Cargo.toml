@@ -35,3 +35,11 @@ pedantic = { level = "warn", priority = -1 }
 [[example]]
 name = "library"
 path = "examples/library.rs"
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "analyse"
+path = "benches/analyse.rs"
+harness = false
