@@ -33,8 +33,16 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 
 [[example]]
+name = "language_server"
+path = "examples/language_server.rs"
+
+[[example]]
 name = "library"
 path = "examples/library.rs"
+
+[[example]]
+name = "lint_a_document"
+path = "examples/lint_a_document.rs"
 
 [[bench]]
 name = "analyse"
