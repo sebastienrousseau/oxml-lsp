@@ -22,10 +22,22 @@ fn main() -> ExitCode {
     if args.iter().any(|a| a == "-h" || a == "--help") {
         println!(
             "oxml-lsp — XML diagnostics\n\n\
-             USAGE:\n    oxml-lsp [FILE]\n\n\
+             USAGE:\n    oxml-lsp [FILE]\n    oxml-lsp --stdio\n\n\
              Reads standard input when no file is given.\n\n\
+             --stdio runs as a language server, speaking LSP over\n\
+             standard input and output. This is the mode an editor\n\
+             starts; it is not useful from a terminal.\n\n\
              EXIT STATUS:\n    0  no errors\n    1  at least one error\n"
         );
+        return ExitCode::SUCCESS;
+    }
+
+    // `--stdio` is the conventional flag an editor passes to start a
+    // language server. The protocol owns the streams from here.
+    if args.iter().any(|a| a == "--stdio") {
+        let stdin = std::io::stdin();
+        let stdout = std::io::stdout();
+        oxml_lsp::lsp::serve(stdin.lock(), stdout.lock());
         return ExitCode::SUCCESS;
     }
 

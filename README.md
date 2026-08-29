@@ -19,26 +19,25 @@
 
 ---
 
-> ### Status: not yet a language server
+> ### Status: a language server for diagnostics
 >
-> **The LSP JSON-RPC transport is not implemented.** What exists is the
-> analysis engine — `analyse()` returns positioned diagnostics — and a
-> command-line front end that prints them.
+> **`oxml-lsp --stdio` speaks the Language Server Protocol**, for the
+> one thing this crate does well: diagnostics. An editor starts it,
+> opens a document, and gets positioned squiggles as it types.
 >
-> That is genuinely useful today for linting XML in CI or a
-> `Makefile`, and it is not what "LSP" leads you to expect, so it is
-> the first thing on this page rather than a note near the bottom.
+> What it does **not** advertise: completion, hover, formatting,
+> go-to-definition, schema validation. Announcing a capability and
+> returning nothing is worse than staying quiet — an editor that
+> believes the announcement stops offering its own fallback.
 >
-> The transport is a thin layer over `analyse()` and follows a
-> decision about which editor to target first.
-
----
+> The command-line linter is unchanged and still the right tool for CI
+> or a `Makefile`.
 
 ## Contents
 
 **Getting started**
 
-- [What it does today](#what-it-does-today) — a linter and a library, not yet a language server
+- [What it does today](#what-it-does-today) — diagnostics over LSP, a linter, and a library
 - [Install](#install) — Cargo, from source
 - [Quick Start](#quick-start) — lint a file in one line
 
@@ -75,9 +74,12 @@
   severity, a line and column, a message and a stable code.
 - **A command-line linter.** Reads a file or standard input, prints
   diagnostics, exits non-zero if any is an error.
+- **A language server.** `oxml-lsp --stdio` implements `initialize`,
+  the `textDocument` open/change/close lifecycle, and pushes
+  `publishDiagnostics` after every edit.
 
-What it does **not** do: speak LSP, offer completion, format, or
-validate against a schema.
+What it does **not** do: completion, hover, formatting,
+go-to-definition, or schema validation.
 
 ## Install
 
@@ -223,16 +225,18 @@ sources, not a new front end.
 
 | | Language | Diagnostics | Schema validation | LSP transport |
 |---|---|---|---|---|
-| **`oxml-lsp`** | Rust, no `unsafe` | ✅ well-formedness, duplicate attributes, empty elements | ✗ — use `oxml-cli validate` or `xmlschema` | ✗ **not yet** |
+| **`oxml-lsp`** | Rust, no `unsafe` | ✅ well-formedness, duplicate attributes, empty elements | ✗ — use `oxml-cli validate` or `xmlschema` | ✅ diagnostics only |
 | [`lemminx`](https://github.com/eclipse/lemminx) | Java | ✅ | ✅ XSD and DTD | ✅ |
 | [`vscode-xml`](https://github.com/redhat-developer/vscode-xml) | Java (`lemminx` underneath) | ✅ | ✅ | ✅ |
 
-The honest summary: if you want a working XML language server today,
-use `lemminx`. This crate is a linter and a library with a language
-server's name, and [Roadmap](#roadmap) says what the transport still
-needs. What it offers meanwhile is a Rust dependency with no JVM, no
-`unsafe`, and a linting pass fast enough to run on every keystroke —
-see [Benchmarks](#benchmarks).
+The honest summary: `lemminx` remains the more complete server. It
+validates against XSD and DTD, offers completion and hover, and has
+years of editor integration behind it. This crate serves diagnostics
+and says so in its capabilities rather than advertising more.
+
+What it offers instead is a Rust dependency with no JVM, no `unsafe`,
+and a linting pass fast enough to run on every keystroke — see
+[Benchmarks](#benchmarks).
 
 ## Benchmarks
 
@@ -275,7 +279,8 @@ README fail CI when they stop being true.
 
 ## When not to use oxml-lsp
 
-- **You want a working language server today.** This is not one yet.
+- **You want completion, hover or formatting.** It serves diagnostics
+  and nothing else.
   Use `lemminx` (Java) or `vscode-xml`.
 - **You need schema validation.** Use `oxml-cli validate` or
   `xmlschema` directly.

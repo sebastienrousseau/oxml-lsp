@@ -65,6 +65,7 @@ step "examples" bash -c '
   OXML_LSP="$PWD/target/release/oxml-lsp" ./examples/lint.sh &&
   cargo "+$TOOLCHAIN" run --quiet --example library >/dev/null &&
   cargo "+$TOOLCHAIN" run --quiet --example lint_a_document >/dev/null'
+step "examples cover the API" python3 ./scripts/check-example-coverage.py
 step "coverage 95%" cargo "+$TOOLCHAIN" llvm-cov --all-features --fail-under-lines 95 \
   --ignore-filename-regex 'builds/cargo/package'
 step "MSRV $MSRV" cargo "+$MSRV" check --all-features

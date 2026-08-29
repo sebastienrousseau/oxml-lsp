@@ -10,6 +10,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod lsp;
+
 use std::collections::BTreeSet;
 
 /// How serious a diagnostic is, matching LSP's numbering.

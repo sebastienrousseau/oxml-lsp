@@ -1,0 +1,256 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2026 oxml-lsp. All rights reserved.
+
+//! The language server, driven over an in-memory pipe.
+//!
+//! `serve` is generic over its two ends precisely so these can exist.
+//! Spawning a process instead would measure process start and pipe
+//! setup alongside the protocol, and could not assert on what was
+//! written without a second pipe to read it back.
+
+use std::io::Cursor;
+
+/// Frame a message the way a client would.
+fn framed(body: &str) -> String {
+    format!("Content-Length: {}\r\n\r\n{body}", body.len())
+}
+
+/// Run a conversation and split the replies back apart.
+fn converse(messages: &[&str]) -> Vec<String> {
+    let input: String = messages.iter().map(|m| framed(m)).collect();
+    let mut out = Vec::new();
+    oxml_lsp::lsp::serve(Cursor::new(input.into_bytes()), &mut out);
+    let text = String::from_utf8(out).expect("replies are utf-8");
+
+    // Split on the header, keeping the bodies.
+    let mut bodies = Vec::new();
+    let mut rest = text.as_str();
+    while let Some(start) = rest.find("Content-Length: ") {
+        let after = &rest[start + "Content-Length: ".len()..];
+        let (len, remainder) =
+            after.split_once("\r\n\r\n").expect("a framed message");
+        let len: usize = len.trim().parse().expect("a numeric length");
+        assert!(
+            remainder.len() >= len,
+            "header claims {len} bytes but only {} remain",
+            remainder.len()
+        );
+        bodies.push(remainder[..len].to_owned());
+        rest = &remainder[len..];
+    }
+    bodies
+}
+
+#[test]
+fn initialize_advertises_full_document_sync() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+    ]);
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(
+        replies[0].contains("\"textDocumentSync\":1"),
+        "{}",
+        replies[0]
+    );
+    assert!(replies[0].contains("\"id\":1"), "{}", replies[0]);
+}
+
+#[test]
+fn opening_a_document_publishes_diagnostics() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.xml","text":"<a><b></a>"}}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "got {replies:?}");
+    let published = &replies[1];
+    assert!(published.contains("publishDiagnostics"), "{published}");
+    assert!(published.contains("file:///a.xml"), "{published}");
+    // A mismatched tag is an error, severity 1.
+    assert!(published.contains("\"severity\":1"), "{published}");
+}
+
+#[test]
+fn a_clean_document_publishes_an_empty_list() {
+    // `<a><b/></a>` would *not* do: the linter reports an empty
+    // element as a hint, so a document being well-formed is not the
+    // same as it having nothing to say. This one has nothing to say.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///ok.xml","text":"<a>text</a>"}}}"#,
+    ]);
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    // The list must be present and empty, not absent: an editor clears
+    // its squiggles on an empty list and leaves them on no message.
+    assert!(replies[0].contains("\"diagnostics\":[]"), "{}", replies[0]);
+}
+
+#[test]
+fn changing_a_document_republishes() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.xml","text":"<a>ok</a>"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///a.xml"},"contentChanges":[{"text":"<a><b></a>"}]}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "got {replies:?}");
+    assert!(replies[0].contains("\"diagnostics\":[]"), "{}", replies[0]);
+    assert!(replies[1].contains("\"severity\":1"), "{}", replies[1]);
+}
+
+#[test]
+fn closing_a_document_clears_its_diagnostics() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.xml","text":"<a><b></a>"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///a.xml"}}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "got {replies:?}");
+    assert!(replies[1].contains("\"diagnostics\":[]"), "{}", replies[1]);
+}
+
+#[test]
+fn shutdown_is_answered_and_exit_ends_the_session() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":9,"method":"shutdown"}"#,
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+        r#"{"jsonrpc":"2.0","id":10,"method":"initialize","params":{}}"#,
+    ]);
+    // The initialize after exit must not be answered: the session is
+    // over, and replying would mean the loop kept running.
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(replies[0].contains("\"id\":9"), "{}", replies[0]);
+}
+
+#[test]
+fn an_unknown_request_is_answered_but_a_notification_is_not() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/somethingElse","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{}}"#,
+    ]);
+    // A client waiting on a request it sent must get something back;
+    // a notification by definition draws nothing.
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(replies[0].contains("-32601"), "{}", replies[0]);
+}
+
+#[test]
+fn malformed_json_does_not_end_the_session() {
+    let replies = converse(&[
+        "not json at all",
+        r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "got {replies:?}");
+    assert!(replies[0].contains("-32700"), "{}", replies[0]);
+    assert!(replies[1].contains("\"id\":2"), "{}", replies[1]);
+}
+
+#[test]
+fn the_content_length_header_counts_bytes_not_characters() {
+    // A document containing an emoji makes the two differ. If the
+    // server counted characters, this reply would be truncated and
+    // every message after it would be misframed — which `converse`
+    // asserts against when it splits the stream.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///emoji.xml","text":"<a>😀</a>"}}}"#,
+        r#"{"jsonrpc":"2.0","id":4,"method":"initialize","params":{}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "got {replies:?}");
+    assert!(
+        replies[1].contains("\"id\":4"),
+        "stream desynchronised: {replies:?}"
+    );
+}
+
+#[test]
+fn every_severity_maps_to_its_lsp_code() {
+    // LSP severities are 1-4, most severe first, and an editor renders
+    // each differently — an error underlined red, a hint barely at all.
+    // Mapping one wrongly is invisible in tests that only look for
+    // "some diagnostic".
+    //
+    // A duplicate id is a warning (2) and an empty element a hint (4);
+    // this document has both, plus nothing that is an error.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///s.xml","text":"<r><a id=\"x\">t</a><b id=\"x\">t</b><c/></r>"}}}"#,
+    ]);
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(
+        replies[0].contains("\"severity\":2"),
+        "no warning in {}",
+        replies[0]
+    );
+    assert!(
+        replies[0].contains("\"severity\":4"),
+        "no hint in {}",
+        replies[0]
+    );
+}
+
+#[test]
+fn a_lifecycle_message_missing_its_fields_is_ignored() {
+    // A client that sends `didOpen` without `text`, or `didChange`
+    // without `contentChanges`, has sent something this server cannot
+    // act on. Ignoring it is right; panicking or publishing
+    // diagnostics for a document whose content is unknown is not.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///x.xml"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///x.xml"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didClose","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":5,"method":"initialize","params":{}}"#,
+    ]);
+    // Only the initialize draws a reply; the session survives all three.
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(replies[0].contains("\"id\":5"), "{}", replies[0]);
+}
+
+#[test]
+fn a_message_without_content_length_ends_the_session() {
+    // There is no other delimiter in the protocol, so a message
+    // without the header cannot be read at all. Ending is the only
+    // honest outcome; guessing a length would misframe everything
+    // after it.
+    let mut out = Vec::new();
+    oxml_lsp::lsp::serve(
+        Cursor::new(b"Content-Type: application/json\r\n\r\n{}".to_vec()),
+        &mut out,
+    );
+    assert!(out.is_empty(), "should have read nothing: {out:?}");
+}
+
+#[test]
+fn a_broken_pipe_ends_the_session_rather_than_looping() {
+    /// A writer that fails once it has accepted `budget` bytes.
+    struct Failing {
+        written: usize,
+        budget: usize,
+        refused: usize,
+    }
+    impl std::io::Write for Failing {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.written >= self.budget {
+                self.refused += 1;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "gone",
+                ));
+            }
+            let take = buf.len().min(self.budget - self.written);
+            self.written += take;
+            Ok(take)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let input: String = (1..=3)
+        .map(|i| framed(&format!(r#"{{"jsonrpc":"2.0","id":{i},"method":"initialize","params":{{}}}}"#)))
+        .collect();
+    let mut sink = Failing {
+        written: 0,
+        budget: 10,
+        refused: 0,
+    };
+    oxml_lsp::lsp::serve(Cursor::new(input.into_bytes()), &mut sink);
+
+    // Counting refusals rather than bytes: a sink that rejects
+    // everything looks the same from outside whether the loop stopped
+    // or carried on, because either way nothing more arrives.
+    assert_eq!(sink.refused, 1, "the loop should stop at the first refusal");
+}

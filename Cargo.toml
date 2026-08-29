@@ -4,7 +4,7 @@ version = "0.0.7"
 edition = "2024"
 rust-version = "1.86.0"
 license = "MIT OR Apache-2.0"
-description = "XML diagnostics engine and linter, powered by oxml (LSP transport not yet implemented)"
+description = "XML diagnostics over the Language Server Protocol, plus a linter and a library, powered by oxml"
 repository = "https://github.com/sebastienrousseau/oxml-lsp"
 homepage = "https://github.com/sebastienrousseau/oxml-lsp"
 documentation = "https://docs.rs/oxml-lsp"
@@ -23,6 +23,7 @@ path = "src/main.rs"
 
 [dependencies]
 oxml = "0.0.7"
+oxml-json = "0.0.8"
 
 [lints.rust]
 missing_docs = "warn"
@@ -33,8 +34,16 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 
 [[example]]
+name = "language_server"
+path = "examples/language_server.rs"
+
+[[example]]
 name = "library"
 path = "examples/library.rs"
+
+[[example]]
+name = "lint_a_document"
+path = "examples/lint_a_document.rs"
 
 [[bench]]
 name = "analyse"
