@@ -5,6 +5,47 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-08-29
+
+### Added
+
+- **It speaks the Language Server Protocol.** `lsp::serve` reads and
+  writes JSON-RPC over stdio with `Content-Length` framing, handling
+  `initialize`, `shutdown`, `exit`, `textDocument/didOpen`,
+  `didChange`, `didClose` and `publishDiagnostics`. Until now the
+  crate was named for a protocol it did not speak, and said so.
+
+  `Content-Length` counts **bytes**, not characters. A document
+  containing an emoji makes the two differ, and a client that counts
+  characters desynchronises the stream on its first such message;
+  there is a test for exactly that. Sync is full-document
+  (`textDocumentSync: 1`), which is correct before it is fast.
+
+  `serve` is generic over its two ends, so it is driven from a buffer
+  in tests rather than from a spawned process.
+
+- A fuzz target over `analyse`, run for 300 seconds on every pull
+  request, and a TESTING document describing what is checked and how.
+
+### Changed
+
+- JSON is now parsed by `oxml-json` rather than a private copy, so the
+  MCP server and the language server cannot disagree about what a
+  number means.
+
+### Fixed
+
+- The README and roadmap described the transport as forthcoming after
+  it had shipped -- including an FAQ entry explaining why the crate
+  was not a language server. Documentation that describes shipped work
+  as pending is worse than none.
+
+### Security
+
+- Branch coverage measured and gated, CodeQL added, the Developer
+  Certificate of Origin adopted and enforced, and Scorecard results
+  kept out of code scanning.
+
 ## [0.0.7] - 2026-08-28
 
 ### Added
