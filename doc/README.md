@@ -6,6 +6,7 @@
 |---|---|
 | [POSITIONS.md](POSITIONS.md) | Zero-based, character-counted, and the UTF-16 gap |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | Why one per document, and what the codes mean |
+| [TESTING.md](TESTING.md) | Tests, fuzzing, coverage and what is tested elsewhere |
 | [ROADMAP.md](ROADMAP.md) | What "not yet a language server" means, and the order |
 
 The library's own documentation covers the parser and the threat model:
