@@ -35,8 +35,8 @@
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 
-use crate::json::{self, Json};
 use crate::{Severity, analyse};
+use oxml_json::{self as json, Json};
 
 /// Serve the protocol over a byte stream until the client exits.
 ///

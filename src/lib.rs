@@ -10,7 +10,6 @@
 
 #![forbid(unsafe_code)]
 
-mod json;
 pub mod lsp;
 
 use std::collections::BTreeSet;

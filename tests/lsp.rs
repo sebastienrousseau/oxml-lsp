@@ -156,3 +156,101 @@ fn the_content_length_header_counts_bytes_not_characters() {
         "stream desynchronised: {replies:?}"
     );
 }
+
+#[test]
+fn every_severity_maps_to_its_lsp_code() {
+    // LSP severities are 1-4, most severe first, and an editor renders
+    // each differently — an error underlined red, a hint barely at all.
+    // Mapping one wrongly is invisible in tests that only look for
+    // "some diagnostic".
+    //
+    // A duplicate id is a warning (2) and an empty element a hint (4);
+    // this document has both, plus nothing that is an error.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///s.xml","text":"<r><a id=\"x\">t</a><b id=\"x\">t</b><c/></r>"}}}"#,
+    ]);
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(
+        replies[0].contains("\"severity\":2"),
+        "no warning in {}",
+        replies[0]
+    );
+    assert!(
+        replies[0].contains("\"severity\":4"),
+        "no hint in {}",
+        replies[0]
+    );
+}
+
+#[test]
+fn a_lifecycle_message_missing_its_fields_is_ignored() {
+    // A client that sends `didOpen` without `text`, or `didChange`
+    // without `contentChanges`, has sent something this server cannot
+    // act on. Ignoring it is right; panicking or publishing
+    // diagnostics for a document whose content is unknown is not.
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///x.xml"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///x.xml"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didClose","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":5,"method":"initialize","params":{}}"#,
+    ]);
+    // Only the initialize draws a reply; the session survives all three.
+    assert_eq!(replies.len(), 1, "got {replies:?}");
+    assert!(replies[0].contains("\"id\":5"), "{}", replies[0]);
+}
+
+#[test]
+fn a_message_without_content_length_ends_the_session() {
+    // There is no other delimiter in the protocol, so a message
+    // without the header cannot be read at all. Ending is the only
+    // honest outcome; guessing a length would misframe everything
+    // after it.
+    let mut out = Vec::new();
+    oxml_lsp::lsp::serve(
+        Cursor::new(b"Content-Type: application/json\r\n\r\n{}".to_vec()),
+        &mut out,
+    );
+    assert!(out.is_empty(), "should have read nothing: {out:?}");
+}
+
+#[test]
+fn a_broken_pipe_ends_the_session_rather_than_looping() {
+    /// A writer that fails once it has accepted `budget` bytes.
+    struct Failing {
+        written: usize,
+        budget: usize,
+        refused: usize,
+    }
+    impl std::io::Write for Failing {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.written >= self.budget {
+                self.refused += 1;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "gone",
+                ));
+            }
+            let take = buf.len().min(self.budget - self.written);
+            self.written += take;
+            Ok(take)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let input: String = (1..=3)
+        .map(|i| framed(&format!(r#"{{"jsonrpc":"2.0","id":{i},"method":"initialize","params":{{}}}}"#)))
+        .collect();
+    let mut sink = Failing {
+        written: 0,
+        budget: 10,
+        refused: 0,
+    };
+    oxml_lsp::lsp::serve(Cursor::new(input.into_bytes()), &mut sink);
+
+    // Counting refusals rather than bytes: a sink that rejects
+    // everything looks the same from outside whether the loop stopped
+    // or carried on, because either way nothing more arrives.
+    assert_eq!(sink.refused, 1, "the loop should stop at the first refusal");
+}
