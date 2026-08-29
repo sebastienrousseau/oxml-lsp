@@ -51,7 +51,7 @@
 - [Diagnostics](#diagnostics) — what is reported, and at what severity
 - [Exit status](#exit-status) — and why it matters in a pipeline
 - [Design](#design) — positions, severities, and what is deliberately absent
-- [Roadmap](#roadmap) — what the LSP transport needs
+- [Roadmap](#roadmap) — what comes after the transport
 - [Ecosystem comparison](#ecosystem-comparison) — and when to use `lemminx` instead
 - [Benchmarks](#benchmarks) — latency per document, which is what an editor feels
 
@@ -148,9 +148,9 @@ assert_eq!(d.start.line, 0);
 | `Position` | `line`, `character` — **zero-based**, as LSP requires |
 | `Severity` | `Error`, `Warning`, `Information`, `Hint` — numbered as LSP numbers them |
 
-Both are shaped for the transport that is coming: positions are
-zero-based and `Severity`'s discriminants are LSP's numbers, so the
-layer will be a cast rather than a conversion.
+Both are shaped for the transport: positions are zero-based and
+`Severity`'s discriminants are LSP's numbers, so the layer is a cast
+rather than a conversion.
 
 The command-line front end adds one to both before printing, because a
 person counting lines starts at one.
@@ -193,8 +193,8 @@ liability.
 
 **The analysis is a library, not a binary.** `analyse()` takes a `&str`
 and returns owned diagnostics. No I/O, no protocol, no global state —
-so it is testable without an editor, and the CLI and the eventual LSP
-transport are both thin layers over the same function.
+so it is testable without an editor, and the CLI and the LSP transport
+are both thin layers over the same function.
 
 **No error recovery.** The parser stops at the first well-formedness
 violation. Recovery means guessing what a malformed document meant, and
@@ -210,15 +210,19 @@ elsewhere, an LSP `Range` later.
 
 In the order it makes sense to build:
 
-1. **LSP transport** — `initialize`, `textDocument/didOpen`,
-   `didChange`, `publishDiagnostics`. A thin layer over `analyse()`.
-2. **Incremental sync**, so a large document is not reparsed on every
-   keystroke.
-3. **Schema-aware diagnostics** via `xmlschema`, which is where
-   validity errors rather than well-formedness errors come from.
-4. **Completion** from a schema.
+Done in 0.0.8: the **LSP transport** — `initialize`, `shutdown`,
+`exit`, `textDocument/didOpen`, `didChange`, `didClose` and
+`publishDiagnostics`, framed with `Content-Length` over stdio.
 
-Steps 3 and 4 are why the analysis is a library: they add diagnostic
+Next, in the order it makes sense to build:
+
+1. **Incremental sync**, so a large document is not reparsed on every
+   keystroke. Sync is currently full-document.
+2. **Schema-aware diagnostics** via `xmlschema`, which is where
+   validity errors rather than well-formedness errors come from.
+3. **Completion** from a schema.
+
+Steps 2 and 3 are why the analysis is a library: they add diagnostic
 sources, not a new front end.
 
 ## Ecosystem comparison
@@ -289,12 +293,16 @@ README fail CI when they stop being true.
 
 ## FAQ
 
-### Why is it called `oxml-lsp` if it is not a language server?
+### Is it a language server?
 
-Because that is what it is being built into, and the crate name was
-claimed when the suite was published. The gap is stated at the top of
-this page rather than buried, and the crates.io description says
-"diagnostics engine" rather than "language server".
+Yes, since 0.0.8. It speaks LSP over stdio: `initialize`, `shutdown`,
+`exit`, `textDocument/didOpen`, `didChange`, `didClose` and
+`publishDiagnostics`, with `Content-Length` framing.
+
+Sync is full-document rather than incremental, which is correct but
+reparses on every keystroke; that is the next thing on the roadmap.
+The linter and the library remain, and all three are thin layers over
+the same `analyse()`.
 
 ### Can I use it in CI now?
 
