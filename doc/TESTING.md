@@ -10,8 +10,10 @@ That runs everything CI runs. The individual pieces are below.
 
 ## Unit and integration tests
 
-21 tests over `analyse()`, every `Diagnostic` field, positions and
-exit codes.
+34 tests over `analyse()`, every `Diagnostic` field, positions and
+exit codes, and the LSP transport added at 0.0.8 -- including that
+`Content-Length` counts bytes rather than characters, which a client
+counting characters gets wrong on its first message containing one.
 
 Positions are the part worth testing carefully. A diagnostic reports a
 line and a *character* offset, not a byte offset, because that is what
