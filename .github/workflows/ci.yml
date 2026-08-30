@@ -54,11 +54,19 @@ jobs:
       - run: cargo build --release
       - name: The shell example, which asserts its own output
         run: OXML_LSP="$PWD/target/release/oxml-lsp" ./examples/lint.sh
-      - name: The library examples
+      # Discovered rather than listed. This step named three examples,
+      # so a fourth added later would have been built and never run --
+      # and these examples assert, which makes an unrun one a check
+      # that silently stopped checking.
+      - name: Run every example, which asserts its own output
         run: |
-          cargo run --example library
-          cargo run --example lint_a_document
-          cargo run --example language_server
+          set -euo pipefail
+          cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; [print(t["name"]) for p in json.load(sys.stdin)["packages"] for t in p["targets"] if "example" in t["kind"]]' \
+            | while read -r name; do
+                echo "== $name"
+                cargo run -q --example "$name"
+              done
 
   example-coverage:
     name: Examples cover the API
