@@ -4,19 +4,19 @@ version = 4
 
 [[package]]
 name = "oxml"
-version = "0.0.8"
+version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65738933159b449b498562b3eb4913f62e907be69bbdb8473a1d8b6c74f519c8"
+checksum = "21cfe82a88f49f99d04270f9c40041e372b3fc12050c140e84e672810e82a651"
 
 [[package]]
 name = "oxml-json"
-version = "0.0.8"
+version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b320bee7228e8f8cd4b909eaafae0963aa268a05fad1b8d5ce9f2d82ed43847"
+checksum = "f742c21481535d472deff38f54036f2151a24dbfbc21b19700897678d582159c"
 
 [[package]]
 name = "oxml-lsp"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "oxml",
  "oxml-json",
