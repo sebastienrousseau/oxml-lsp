@@ -17,6 +17,10 @@
   <a href="https://www.bestpractices.dev/projects/14313"><img src="https://img.shields.io/cii/level/14313?style=for-the-badge&label=OpenSSF%20Best%20Practices&logo=openssf" alt="OpenSSF Best Practices" /></a>
 </p>
 
+<p align="center">
+  <img src=".github/demo.gif" alt="oxml-lsp Demo" width="100%" />
+</p>
+
 ---
 
 > ### Status: a language server for diagnostics
