@@ -2,7 +2,7 @@
 site_name: oxml-lsp
 site_description: >-
   XML diagnostics and linting over the Language Server Protocol, powered by oxml.
-site_url: https://sebastienrousseau.github.io/oxml-lsp/
+site_url: https://lsp.oxmllib.com/
 site_author: Sebastien Rousseau
 copyright: Copyright &copy; 2026 <a href="https://sebastienrousseau.com/" rel="author">Sebastien Rousseau</a>
 
