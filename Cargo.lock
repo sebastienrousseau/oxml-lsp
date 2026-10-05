@@ -16,7 +16,7 @@ checksum = "f742c21481535d472deff38f54036f2151a24dbfbc21b19700897678d582159c"
 
 [[package]]
 name = "oxml-lsp"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "oxml",
  "oxml-json",
