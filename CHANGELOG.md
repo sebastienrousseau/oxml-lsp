@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Upgrade to `oxml` 0.0.10.** Duplicate `xmlns` declarations and a
+  `<?xml-stylesheet ...?>` impersonating the XML declaration are now
+  diagnosed as the parser reports them.
 - **Ecosystem release cycle v0.0.10.** Begin next iteration cycle across the
   entire lockstep suite.
 - **Documentation migration.** Migrated website and rendered manual to
