@@ -292,10 +292,10 @@ fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
         if trimmed.is_empty() {
             break;
         }
-        if let Some((name, value)) = trimmed.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                length = value.trim().parse().ok();
-            }
+        if let Some((name, value)) = trimmed.split_once(':')
+            && name.trim().eq_ignore_ascii_case("content-length")
+        {
+            length = value.trim().parse().ok();
         }
     }
 
