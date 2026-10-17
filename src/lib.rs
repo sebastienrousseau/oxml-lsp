@@ -59,7 +59,7 @@ pub struct Diagnostic {
 /// describe the same underlying mistake.
 #[must_use]
 pub fn analyse(source: &str) -> Vec<Diagnostic> {
-    let doc = match oxml::parse(source) {
+    let doc = match oxml::parse_with(source, oxml::Limits::strict()) {
         Ok(doc) => doc,
         Err(e) => {
             let (line, column) = e.line_column(source);

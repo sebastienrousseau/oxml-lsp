@@ -47,7 +47,7 @@
 
 **The oxml ecosystem**
 
-- [The oxml ecosystem](#the-oxml-ecosystem) — six crates, one version
+- [The oxml ecosystem](#the-oxml-ecosystem) — seven crates, one version
 
 **Reference**
 
@@ -88,14 +88,14 @@ go-to-definition, or schema validation.
 ## Install
 
 ```bash
-cargo install oxml-lsp
+cargo install oxml-lsp --version 0.0.11 --locked
 ```
 
 As a library:
 
 ```toml
 [dependencies]
-oxml-lsp = "0.0.8"
+oxml-lsp = "0.0.11"
 ```
 
 ## Quick Start
@@ -127,8 +127,9 @@ find . -name '*.xml' -print0 | xargs -0 -n1 oxml-lsp
 | [`oxml-wasm`](https://github.com/sebastienrousseau/oxml-wasm) | WebAssembly bindings |
 | [`oxml-mcp`](https://github.com/sebastienrousseau/oxml-mcp) | Model Context Protocol server |
 | **`oxml-lsp`** | **This crate — diagnostics** |
+| [`oxml-json`](https://github.com/sebastienrousseau/oxml-json) | JSON support for the language server |
 
-All six ship one version number, in steps of 0.0.1.
+All seven ship one version number, in steps of 0.0.1.
 
 ## Library API
 
@@ -346,8 +347,9 @@ No. No network code, and external entities are never dereferenced.
 
 ### Which editors work with it?
 
-None, directly, until the transport lands. You can wire the CLI into
-any editor that runs a linter on save.
+Editors that can launch a stdio language server can use
+`oxml-lsp --stdio` for diagnostics. Completion, hover and schema
+validation are not advertised.
 
 ## Development
 
@@ -381,7 +383,9 @@ CI runs the same set on Linux, macOS and Windows.
 
 No network access. External entities never dereferenced, so a document
 cannot make the linter read `/etc/passwd`. Entity expansion and
-recursion bounded. `#![forbid(unsafe_code)]`.
+recursion bounded. Analysis uses the strict core profile, including an
+8 MiB document limit. LSP headers are capped at 8 KiB and message bodies
+at 16 MiB before body allocation. `#![forbid(unsafe_code)]`.
 
 See
 <https://github.com/sebastienrousseau/oxml/blob/main/doc/SECURITY-MODEL.md>.

@@ -279,15 +279,22 @@ fn error_response(id: &Json, code: i32, message: &str) -> Json {
 /// worth disconnecting.
 fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
     let mut length: Option<usize> = None;
+    let mut remaining_header_bytes = 8192_usize;
 
     loop {
         let mut line = String::new();
-        match reader.read_line(&mut line) {
+        let mut bounded = std::io::Read::take(
+            &mut *reader,
+            (remaining_header_bytes + 1) as u64,
+        );
+        match bounded.read_line(&mut line) {
             // End of input and a broken pipe are the same thing here:
             // the client is gone and there is no message to read.
             Ok(0) | Err(_) => return None,
             Ok(_) => {}
         }
+        remaining_header_bytes =
+            remaining_header_bytes.checked_sub(line.len())?;
         let trimmed = line.trim_end_matches(['\r', '\n']);
         if trimmed.is_empty() {
             break;
@@ -301,7 +308,9 @@ fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
 
     // A message with no Content-Length cannot be read: there is no
     // other delimiter in the protocol.
-    let length = length?;
+    // Refuse a hostile length before allocating its body. Headers are
+    // independently bounded so read_line cannot grow without a delimiter.
+    let length = length.filter(|size| *size <= 16 * 1024 * 1024)?;
     let mut body = vec![0_u8; length];
     reader.read_exact(&mut body).ok()?;
     String::from_utf8(body).ok()
