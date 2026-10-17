@@ -6,7 +6,6 @@ rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
 description = "XML diagnostics over the Language Server Protocol, plus a linter and a library, powered by oxml"
 repository = "https://github.com/sebastienrousseau/oxml-lsp"
-homepage = "https://github.com/sebastienrousseau/oxml-lsp"
 documentation = "https://docs.rs/oxml-lsp"
 readme = "README.md"
 keywords = ["xml", "lsp", "language-server", "diagnostics", "xsd"]
