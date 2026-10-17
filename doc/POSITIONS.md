@@ -2,15 +2,16 @@
 
 # Positions
 
-## Two conventions, on purpose
+## Three boundaries, on purpose
 
 | | Base | Counted in |
 |---|---|---|
 | `oxml_lsp::Position` | **Zero** | Characters |
 | The command-line output | **One** | Characters |
+| LSP stdio ranges | **Zero** | UTF-16 code units |
 
-The library is zero-based because LSP is, and the transport layer that
-is coming should be a cast rather than a conversion. The command line
+The library is zero-based because LSP is. The transport converts scalar
+columns to UTF-16 without changing the native API. The command line
 adds one before printing, because a person counting lines starts at
 one and every editor agrees with them.
 
@@ -30,24 +31,23 @@ The underlying parser reports a **byte** offset — deliberately, so that
 each consumer converts to what it needs. This crate converts to
 characters; something drawing a caret over raw bytes would not.
 
-## The UTF-16 gap
+## UTF-16 at the transport boundary
 
-LSP's default `positionEncoding` is **UTF-16 code units**. This crate
-counts characters.
+LSP's default `positionEncoding` is **UTF-16 code units**. The native
+analyser counts Unicode scalar values; the stdio transport converts
+both endpoints before publishing diagnostics.
 
 They agree for everything in the Basic Multilingual Plane, which is
 almost everything. They disagree by one per non-BMP character — an
 emoji, a rarer CJK ideograph — earlier on the same line, because those
 are one character and two UTF-16 code units.
 
-Two ways to close it when the transport lands:
-
-1. Convert on the way out, counting `c.len_utf16()`.
-2. Negotiate `positionEncoding: "utf-32"`, which LSP 3.17 permits and
-   which matches what is already stored.
-
-Option 2 is preferable where the client supports it, because a
-conversion that runs per diagnostic is a conversion that can be wrong.
+The adapter sorts the endpoints, scans each source character at most
+once, and assigns the converted endpoints back to the original diagnostic
+indices. For `d` diagnostics and `n` source characters, conversion costs
+O(n + d log d) time and O(d) temporary space. It does not rescan the
+document once per diagnostic or change diagnostic ordering. Protocol
+tests cover BMP/non-BMP text, newlines, CRLF and end-of-input positions.
 
 ## Ranges
 

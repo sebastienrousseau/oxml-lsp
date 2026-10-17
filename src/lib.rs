@@ -32,7 +32,8 @@ pub enum Severity {
 pub struct Position {
     /// Zero-based line.
     pub line: usize,
-    /// Zero-based character offset within the line.
+    /// Zero-based Unicode scalar offset within the line. The LSP transport
+    /// converts this to UTF-16 code units; native callers retain scalars.
     pub character: usize,
 }
 

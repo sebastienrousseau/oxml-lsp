@@ -10,7 +10,7 @@ That runs everything CI runs. The individual pieces are below.
 
 ## Unit and integration tests
 
-38 tests over `analyse()`, every `Diagnostic` field, positions and
+41 tests over `analyse()`, every `Diagnostic` field, positions and
 exit codes, and the LSP transport added at 0.0.8 -- including that
 `Content-Length` counts bytes rather than characters, which a client
 counting characters gets wrong on its first message containing one.

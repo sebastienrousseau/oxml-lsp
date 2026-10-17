@@ -48,7 +48,7 @@ in either direction fails the build.
 ## The evidence
 
 - `#![forbid(unsafe_code)]`, checked by a CI job.
-- 38 tests over `analyse()`, every `Diagnostic` field, positions and exit codes, and the LSP transport added at 0.0.8 -- including byte-counted frames, bounded headers/bodies and bounded CLI stdin.
+- 41 tests over `analyse()`, every `Diagnostic` field, positions and exit codes, and the LSP transport added at 0.0.8 -- including byte-counted frames, bounded headers/bodies, bounded CLI stdin, UTF-16 ranges and rejection of requests after shutdown.
 - Line coverage gated at a 95% floor.
 - `analyse()` is linear in document size; a quadratic pass over attributes was found by benchmark and fixed, taking 1,088 ms to 9.5 ms.
 

@@ -37,6 +37,8 @@ use std::io::{BufRead, Write};
 use crate::{Severity, analyse};
 use oxml_json::{self as json, Json};
 
+mod positions;
+
 /// Serve the protocol over a byte stream until the client exits.
 ///
 /// Generic over its two ends so a test can drive it through an
@@ -99,6 +101,14 @@ impl Server {
         let method = request.get("method").and_then(Json::as_str).unwrap_or("");
         let id = request.get("id").cloned().unwrap_or(Json::Null);
         let params = request.get("params");
+
+        if self.shutting_down && method != "exit" {
+            return if request.get("id").is_some() {
+                vec![error_response(&id, -32600, "server is shutting down")]
+            } else {
+                Vec::new()
+            };
+        }
 
         match method {
             "initialize" => vec![ok_response(&id, initialize_result())],
@@ -167,7 +177,9 @@ fn initialize_result() -> Json {
 
 /// The `publishDiagnostics` notification for a document.
 fn diagnostics_notification(uri: &str, text: &str) -> Json {
-    let diagnostics = analyse(text)
+    let mut diagnostics = analyse(text);
+    positions::utf16(text, &mut diagnostics);
+    let diagnostics = diagnostics
         .into_iter()
         .map(|d| {
             Json::object(vec![

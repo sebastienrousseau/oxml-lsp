@@ -118,6 +118,29 @@ fn shutdown_is_answered_and_exit_ends_the_session() {
 }
 
 #[test]
+fn shutdown_rejects_requests_and_ignores_document_notifications() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"shutdown"}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///closed.xml","text":"<a>text</a>"}}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#,
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+    ]);
+    assert_eq!(replies.len(), 3, "got {replies:?}");
+    for (reply, id) in replies[1..].iter().zip([2, 3]) {
+        let parsed = oxml_json::parse(reply).expect("valid JSON reply");
+        assert_eq!(
+            parsed.get("id"),
+            Some(&oxml_json::Json::Number(f64::from(id)))
+        );
+        assert_eq!(
+            parsed.get("error").and_then(|error| error.get("code")),
+            Some(&oxml_json::Json::Number(-32600.0)),
+        );
+    }
+}
+
+#[test]
 fn an_unknown_request_is_answered_but_a_notification_is_not() {
     let replies = converse(&[
         r#"{"jsonrpc":"2.0","method":"textDocument/somethingElse","params":{}}"#,
@@ -154,6 +177,80 @@ fn the_content_length_header_counts_bytes_not_characters() {
     assert!(
         replies[1].contains("\"id\":4"),
         "stream desynchronised: {replies:?}"
+    );
+}
+
+fn opened_diagnostics(source: &str) -> Vec<oxml_json::Json> {
+    use oxml_json::Json;
+    let message = Json::object(vec![
+        ("jsonrpc", Json::str("2.0")),
+        ("method", Json::str("textDocument/didOpen")),
+        (
+            "params",
+            Json::object(vec![(
+                "textDocument",
+                Json::object(vec![
+                    ("uri", Json::str("file:///unicode.xml")),
+                    ("text", Json::str(source)),
+                ]),
+            )]),
+        ),
+    ])
+    .to_json();
+    let replies = converse(&[&message]);
+    let reply = oxml_json::parse(&replies[0]).expect("valid reply");
+    let Some(Json::Array(diagnostics)) =
+        reply.get("params").and_then(|p| p.get("diagnostics"))
+    else {
+        panic!("missing diagnostics");
+    };
+    diagnostics.clone()
+}
+
+fn assert_utf16_ranges(source: &str) {
+    use oxml_json::Json;
+    let native = oxml_lsp::analyse(source);
+    let diagnostics = opened_diagnostics(source);
+    assert_eq!(diagnostics.len(), native.len());
+    for (actual, expected) in diagnostics.iter().zip(&native) {
+        for (field, at) in [("start", expected.start), ("end", expected.end)] {
+            let line = source.split('\n').nth(at.line).expect("source line");
+            let units: usize =
+                line.chars().take(at.character).map(char::len_utf16).sum();
+            let position = actual
+                .get("range")
+                .and_then(|range| range.get(field))
+                .expect("position");
+            let units =
+                f64::from(u32::try_from(units).expect("small test input"));
+            let line =
+                f64::from(u32::try_from(at.line).expect("small test input"));
+            assert_eq!(
+                position.get("character"),
+                Some(&Json::Number(units)),
+                "{source:?} {field}"
+            );
+            assert_eq!(position.get("line"), Some(&Json::Number(line)));
+        }
+    }
+}
+
+#[test]
+fn diagnostic_ranges_use_utf16_without_changing_native_positions() {
+    for source in [
+        "<r>😀<a/>\n😀<b/></r>",
+        "<r>😀</bad>",
+        "<r>😀\r\n</bad>",
+        "<r>é<a/></r>",
+        "<r>😀",
+        "<r>😀<a/>\n<b id='x'>t</b><c id='x'>t</c></r>",
+    ] {
+        assert_utf16_ranges(source);
+    }
+    let native = oxml_lsp::analyse("<r>😀<a/></r>");
+    assert_eq!(
+        native[0].start.character, 4,
+        "native API still counts scalars"
     );
 }
 

@@ -331,15 +331,11 @@ Not from here yet. Use `oxml-cli validate schema.xsd doc.xml`.
 
 ### Are the positions LSP-compatible?
 
-Nearly. `Position` is already zero-based and `Severity`'s discriminants
-are already LSP's numbers.
-
-The remaining gap is that `character` counts **Unicode characters**
-while LSP's default `positionEncoding` counts **UTF-16 code units**.
-They agree for everything in the Basic Multilingual Plane and disagree
-by one per emoji or other non-BMP character earlier on the same line.
-The transport layer will either convert or negotiate `utf-32`, which
-LSP 3.17 allows.
+The stdio transport sends zero-based UTF-16 ranges, LSP's mandatory
+default encoding, including for emoji and other non-BMP characters.
+The native `Position` API continues to count Unicode scalar values;
+the conversion is isolated at the transport boundary. `Severity` uses
+LSP's numeric values directly.
 
 ### Does it fetch anything?
 
