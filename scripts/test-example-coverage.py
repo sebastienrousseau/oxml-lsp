@@ -6,7 +6,9 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -16,6 +18,30 @@ CORE = (ROOT / "crates/oxml/src").is_dir()
 
 
 class ExampleCoverageContract(unittest.TestCase):
+    def test_gate_separates_example_and_suite_instrumentation(self):
+        lines = (ROOT / "scripts/gate.sh").read_text().splitlines()
+        commands = []
+        for index, line in enumerate(lines):
+            if line.startswith(('step "examples cover the API"',
+                                'step "coverage 95%"')):
+                commands.append(line)
+                if line.endswith("\\"):
+                    commands.append(lines[index + 1])
+        self.assertEqual(len(commands), 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ["cargo", "python3"]:
+                tool = Path(tmp) / name
+                tool.write_text('#!/bin/sh\nprintf "%s\\n" "$CARGO_LLVM_COV_TARGET_DIR"\n')
+                tool.chmod(0o755)
+            suite = str(Path(tmp) / "suite")
+            result = subprocess.run(
+                ["bash", "-c", 'step() { shift; "$@"; }\n' + "\n".join(commands)],
+                cwd=ROOT, text=True, capture_output=True, check=True,
+                env={**os.environ, "PATH": tmp + os.pathsep + os.environ["PATH"],
+                     "TOOLCHAIN": "1.98.0", "CARGO_LLVM_COV_TARGET_DIR": suite},
+            )
+            self.assertEqual(result.stdout.splitlines(), [suite + "-examples", suite])
+
     def test_coverage_identity_and_missing_code(self):
         spec = importlib.util.spec_from_file_location(
             "example_checker", ROOT / "scripts/check-example-coverage.py"

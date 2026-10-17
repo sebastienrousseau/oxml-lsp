@@ -69,7 +69,9 @@ step "examples" bash -s <<'EXAMPLES'
   cargo "+$TOOLCHAIN" run --quiet --example library >/dev/null &&
   cargo "+$TOOLCHAIN" run --quiet --example lint_a_document >/dev/null
 EXAMPLES
-step "examples cover the API" python3 ./scripts/check-example-coverage.py
+# Example instrumentation uses absolute paths; suite coverage remaps them.
+# Mixing the two mappings makes LLVM report executed library code as uncovered.
+step "examples cover the API" env CARGO_LLVM_COV_TARGET_DIR="${CARGO_LLVM_COV_TARGET_DIR:-$PWD/target/llvm-cov-target}-examples" python3 ./scripts/check-example-coverage.py
 step "coverage 95%" cargo "+$TOOLCHAIN" llvm-cov --remap-path-prefix --all-features --fail-under-lines 95 \
   --ignore-filename-regex 'builds/cargo/package'
 # What `cargo publish` would upload, and whether the assurance case in
