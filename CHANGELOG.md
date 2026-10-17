@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reject requests after shutdown with InvalidRequest and ignore document
   notifications until exit, as required by the LSP lifecycle contract.
+- Reject structured/boolean request IDs before cloning or echoing them,
+  retaining string, number and null identifiers.
 - Convert diagnostic ranges to UTF-16 at the stdio boundary while
   preserving the native Unicode scalar API and diagnostic order.
 - Bound LSP headers at 8 KiB and bodies at 16 MiB before allocation.

@@ -99,7 +99,13 @@ impl Server {
     /// — so this returns a list rather than an `Option`.
     fn handle(&mut self, request: &Json) -> Vec<Json> {
         let method = request.get("method").and_then(Json::as_str).unwrap_or("");
-        let id = request.get("id").cloned().unwrap_or(Json::Null);
+        let Some(id) = request_id(request) else {
+            return vec![error_response(
+                &Json::Null,
+                -32600,
+                "invalid request id",
+            )];
+        };
         let params = request.get("params");
 
         if self.shutting_down && method != "exit" {
@@ -123,6 +129,18 @@ impl Server {
             }
             _ => document_message(method, params, &id),
         }
+    }
+}
+
+fn request_id(request: &Json) -> Option<Json> {
+    match request.get("id") {
+        None => Some(Json::Null),
+        Some(id @ (Json::String(_) | Json::Number(_) | Json::Null)) => {
+            Some(id.clone())
+        }
+        // Reject before cloning: invalid collection IDs must not turn
+        // the serializer into an untrusted response-expansion path.
+        _ => None,
     }
 }
 

@@ -141,6 +141,27 @@ fn shutdown_rejects_requests_and_ignores_document_notifications() {
 }
 
 #[test]
+fn structured_request_ids_are_rejected_without_echoing_them() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":[1e-300],"method":"initialize"}"#,
+        r#"{"jsonrpc":"2.0","id":{"nested":[1e-300]},"method":"initialize"}"#,
+        r#"{"jsonrpc":"2.0","id":true,"method":"initialize"}"#,
+        r#"{"jsonrpc":"2.0","id":"valid","method":"initialize"}"#,
+    ]);
+    assert_eq!(replies.len(), 4);
+    for reply in &replies[..3] {
+        let value = oxml_json::parse(reply).expect("valid response");
+        assert_eq!(value.get("id"), Some(&oxml_json::Json::Null));
+        assert_eq!(
+            value.get("error").and_then(|error| error.get("code")),
+            Some(&oxml_json::Json::Number(-32600.0)),
+        );
+    }
+    assert!(replies[3].contains("\"id\":\"valid\""));
+    assert!(replies[3].contains("capabilities"));
+}
+
+#[test]
 fn an_unknown_request_is_answered_but_a_notification_is_not() {
     let replies = converse(&[
         r#"{"jsonrpc":"2.0","method":"textDocument/somethingElse","params":{}}"#,
