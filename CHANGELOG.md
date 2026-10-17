@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Align unpublished harnesses at 0.0.11 and match example coverage to
+  exact source paths, with negative regression contracts in local/CI gates.
+- Wait for all actual release prerequisites before compiling, propagate
+  publication failures and keep the laptop helper dry-run-only.
+
+- Reject requests after shutdown with InvalidRequest and ignore document
+  notifications until exit, as required by the LSP lifecycle contract.
+- Convert diagnostic ranges to UTF-16 at the stdio boundary while
+  preserving the native Unicode scalar API and diagnostic order.
 - Bound LSP headers at 8 KiB and bodies at 16 MiB before allocation.
 - Stop CLI file/stdin reads at the 8 MiB source budget without waiting
   for an oversized stream to close.
