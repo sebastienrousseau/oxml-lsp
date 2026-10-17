@@ -47,13 +47,17 @@ fn main() -> ExitCode {
     };
 
     let diagnostics = oxml_lsp::analyse(&source);
+    display_diagnostics(&diagnostics)
+}
+
+fn display_diagnostics(diagnostics: &[oxml_lsp::Diagnostic]) -> ExitCode {
     if diagnostics.is_empty() {
         println!("no diagnostics");
         return ExitCode::SUCCESS;
     }
 
     let mut had_error = false;
-    for d in &diagnostics {
+    for d in diagnostics {
         let label = match d.severity {
             oxml_lsp::Severity::Error => {
                 had_error = true;

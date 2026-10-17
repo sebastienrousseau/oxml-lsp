@@ -32,7 +32,6 @@
 //! those differ, and a server that counts characters desynchronises the
 //! stream on the first non-ASCII message it sends.
 
-use std::collections::HashMap;
 use std::io::{BufRead, Write};
 
 use crate::{Severity, analyse};
@@ -72,11 +71,10 @@ pub fn serve<R: BufRead, W: Write>(input: R, mut output: W) {
 }
 
 /// One connection's state.
+///
+/// Full-document notifications carry their current text. No request
+/// reads an older document, so document text is not retained here.
 struct Server {
-    /// Open documents by URI. The client owns the text; the server
-    /// keeps a copy because `didChange` sends the new content and
-    /// diagnostics are computed from it.
-    documents: HashMap<String, String>,
     /// Set by `exit`.
     exited: bool,
     /// Set by `shutdown`. A request after it is an error per the
@@ -87,7 +85,6 @@ struct Server {
 impl Server {
     fn new() -> Self {
         Self {
-            documents: HashMap::new(),
             exited: false,
             shutting_down: false,
         }
@@ -114,36 +111,43 @@ impl Server {
                 self.exited = true;
                 Vec::new()
             }
-            "textDocument/didOpen" => {
-                let Some((uri, text)) = document_from_open(params) else {
-                    return Vec::new();
-                };
-                let _ = self.documents.insert(uri.clone(), text.clone());
-                vec![diagnostics_notification(&uri, &text)]
-            }
-            "textDocument/didChange" => {
-                let Some((uri, text)) = document_from_change(params) else {
-                    return Vec::new();
-                };
-                let _ = self.documents.insert(uri.clone(), text.clone());
-                vec![diagnostics_notification(&uri, &text)]
-            }
-            "textDocument/didClose" => {
-                if let Some(uri) = uri_of(params) {
-                    let _ = self.documents.remove(&uri);
-                    // Clear the client's diagnostics for a document it
-                    // no longer has open; otherwise stale squiggles
-                    // outlive the file.
-                    return vec![publish(&uri, Vec::new())];
-                }
-                Vec::new()
-            }
-            // An unknown *notification* draws nothing; an unknown
-            // *request* has an id and must be answered, or the client
-            // waits for a reply that never comes.
-            _ if matches!(id, Json::Null) => Vec::new(),
-            _ => vec![error_response(&id, -32601, "method not found")],
+            _ => document_message(method, params, &id),
         }
+    }
+}
+
+fn document_message(
+    method: &str,
+    params: Option<&Json>,
+    id: &Json,
+) -> Vec<Json> {
+    match method {
+        "textDocument/didOpen" => {
+            let Some((uri, text)) = document_from_open(params) else {
+                return Vec::new();
+            };
+            vec![diagnostics_notification(&uri, &text)]
+        }
+        "textDocument/didChange" => {
+            let Some((uri, text)) = document_from_change(params) else {
+                return Vec::new();
+            };
+            vec![diagnostics_notification(&uri, &text)]
+        }
+        "textDocument/didClose" => {
+            if let Some(uri) = uri_of(params) {
+                // Clear the client's diagnostics for a document it
+                // no longer has open; otherwise stale squiggles
+                // outlive the file.
+                return vec![publish(&uri, Vec::new())];
+            }
+            Vec::new()
+        }
+        // An unknown *notification* draws nothing; an unknown
+        // *request* has an id and must be answered, or the client
+        // waits for a reply that never comes.
+        _ if matches!(id, Json::Null) => Vec::new(),
+        _ => vec![error_response(id, -32601, "method not found")],
     }
 }
 
@@ -278,6 +282,18 @@ fn error_response(id: &Json, code: i32, message: &str) -> Json {
 /// client sending a header this does not know about is not a client
 /// worth disconnecting.
 fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
+    let length = read_header_length(reader);
+    // A message with no Content-Length cannot be read: there is no
+    // other delimiter in the protocol.
+    // Refuse a hostile length before allocating its body. Headers are
+    // independently bounded so read_line cannot grow without a delimiter.
+    let length = length.filter(|size| *size <= 16 * 1024 * 1024)?;
+    let mut body = vec![0_u8; length];
+    reader.read_exact(&mut body).ok()?;
+    String::from_utf8(body).ok()
+}
+
+fn read_header_length<R: BufRead>(reader: &mut R) -> Option<usize> {
     let mut length: Option<usize> = None;
     let mut remaining_header_bytes = 8192_usize;
 
@@ -306,14 +322,7 @@ fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
         }
     }
 
-    // A message with no Content-Length cannot be read: there is no
-    // other delimiter in the protocol.
-    // Refuse a hostile length before allocating its body. Headers are
-    // independently bounded so read_line cannot grow without a delimiter.
-    let length = length.filter(|size| *size <= 16 * 1024 * 1024)?;
-    let mut body = vec![0_u8; length];
-    reader.read_exact(&mut body).ok()?;
-    String::from_utf8(body).ok()
+    length
 }
 
 /// Write one framed message.
