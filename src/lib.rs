@@ -32,7 +32,8 @@ pub enum Severity {
 pub struct Position {
     /// Zero-based line.
     pub line: usize,
-    /// Zero-based character offset within the line.
+    /// Zero-based Unicode scalar offset within the line. The LSP transport
+    /// converts this to UTF-16 code units; native callers retain scalars.
     pub character: usize,
 }
 
@@ -59,7 +60,7 @@ pub struct Diagnostic {
 /// describe the same underlying mistake.
 #[must_use]
 pub fn analyse(source: &str) -> Vec<Diagnostic> {
-    let doc = match oxml::parse(source) {
+    let doc = match oxml::parse_with(source, oxml::Limits::strict()) {
         Ok(doc) => doc,
         Err(e) => {
             let (line, column) = e.line_column(source);

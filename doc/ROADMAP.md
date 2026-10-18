@@ -42,7 +42,8 @@ and none of them has to be running for the analysis to be tested.
 
 ## Not planned
 
-- **Formatting.** It needs a serialiser, and the library reads only.
+- **Formatting.** The core has a serializer, but this server currently
+  advertises diagnostics only and has no formatting handler.
 - **XSLT.**
 - **Error recovery** for well-formedness. See
   [DIAGNOSTICS.md](DIAGNOSTICS.md).

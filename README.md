@@ -13,7 +13,7 @@
   <a href="https://github.com/sebastienrousseau/oxml-lsp/actions"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/oxml-lsp/ci.yml?style=for-the-badge&logo=github" alt="Build" /></a>
   <a href="https://crates.io/crates/oxml-lsp"><img src="https://img.shields.io/crates/v/oxml-lsp.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
   <a href="https://docs.rs/oxml-lsp"><img src="https://img.shields.io/badge/docs.rs-oxml--lsp-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
-  <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/oxml-lsp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/oxml-lsp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/sebastienrousseau/oxml-lsp/actions/workflows/scorecard.yml"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/oxml-lsp/scorecard.yml?style=for-the-badge&label=Scorecard%20scan&logo=openssf" alt="Scorecard scan workflow status" /></a>
   <a href="https://www.bestpractices.dev/projects/14313"><img src="https://img.shields.io/cii/level/14313?style=for-the-badge&label=OpenSSF%20Best%20Practices&logo=openssf" alt="OpenSSF Best Practices" /></a>
 </p>
 
@@ -47,7 +47,7 @@
 
 **The oxml ecosystem**
 
-- [The oxml ecosystem](#the-oxml-ecosystem) — six crates, one version
+- [The oxml ecosystem](#the-oxml-ecosystem) — seven crates, one version
 
 **Reference**
 
@@ -88,14 +88,14 @@ go-to-definition, or schema validation.
 ## Install
 
 ```bash
-cargo install oxml-lsp
+cargo install oxml-lsp --version 0.0.11 --locked
 ```
 
 As a library:
 
 ```toml
 [dependencies]
-oxml-lsp = "0.0.8"
+oxml-lsp = "0.0.11"
 ```
 
 ## Quick Start
@@ -127,8 +127,9 @@ find . -name '*.xml' -print0 | xargs -0 -n1 oxml-lsp
 | [`oxml-wasm`](https://github.com/sebastienrousseau/oxml-wasm) | WebAssembly bindings |
 | [`oxml-mcp`](https://github.com/sebastienrousseau/oxml-mcp) | Model Context Protocol server |
 | **`oxml-lsp`** | **This crate — diagnostics** |
+| [`oxml-json`](https://github.com/sebastienrousseau/oxml-json) | JSON support for the language server |
 
-All six ship one version number, in steps of 0.0.1.
+All seven ship one version number, in steps of 0.0.1.
 
 ## Library API
 
@@ -330,15 +331,11 @@ Not from here yet. Use `oxml-cli validate schema.xsd doc.xml`.
 
 ### Are the positions LSP-compatible?
 
-Nearly. `Position` is already zero-based and `Severity`'s discriminants
-are already LSP's numbers.
-
-The remaining gap is that `character` counts **Unicode characters**
-while LSP's default `positionEncoding` counts **UTF-16 code units**.
-They agree for everything in the Basic Multilingual Plane and disagree
-by one per emoji or other non-BMP character earlier on the same line.
-The transport layer will either convert or negotiate `utf-32`, which
-LSP 3.17 allows.
+The stdio transport sends zero-based UTF-16 ranges, LSP's mandatory
+default encoding, including for emoji and other non-BMP characters.
+The native `Position` API continues to count Unicode scalar values;
+the conversion is isolated at the transport boundary. `Severity` uses
+LSP's numeric values directly.
 
 ### Does it fetch anything?
 
@@ -346,8 +343,9 @@ No. No network code, and external entities are never dereferenced.
 
 ### Which editors work with it?
 
-None, directly, until the transport lands. You can wire the CLI into
-any editor that runs a linter on save.
+Editors that can launch a stdio language server can use
+`oxml-lsp --stdio` for diagnostics. Completion, hover and schema
+validation are not advertised.
 
 ## Development
 
@@ -379,9 +377,16 @@ CI runs the same set on Linux, macOS and Windows.
 
 ## Security
 
+Scorecard scans use a digest-pinned upstream image. Results are retained
+as CI artifacts and repository posture findings in GitHub code scanning,
+not published to Scorecard's public service. The badge shows workflow
+status, not a security score; a successful scan can still report findings.
+
 No network access. External entities never dereferenced, so a document
 cannot make the linter read `/etc/passwd`. Entity expansion and
-recursion bounded. `#![forbid(unsafe_code)]`.
+recursion bounded. Analysis uses the strict core profile, including an
+8 MiB document limit. LSP headers are capped at 8 KiB and message bodies
+at 16 MiB before body allocation. `#![forbid(unsafe_code)]`.
 
 See
 <https://github.com/sebastienrousseau/oxml/blob/main/doc/SECURITY-MODEL.md>.

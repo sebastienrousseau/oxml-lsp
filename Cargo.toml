@@ -1,12 +1,11 @@
 [package]
 name = "oxml-lsp"
-version = "0.0.10"
+version = "0.0.11"
 edition = "2024"
-rust-version = "1.86.0"
+rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
 description = "XML diagnostics over the Language Server Protocol, plus a linter and a library, powered by oxml"
 repository = "https://github.com/sebastienrousseau/oxml-lsp"
-homepage = "https://github.com/sebastienrousseau/oxml-lsp"
 documentation = "https://docs.rs/oxml-lsp"
 readme = "README.md"
 keywords = ["xml", "lsp", "language-server", "diagnostics", "xsd"]
@@ -45,8 +44,8 @@ name = "oxml-lsp"
 path = "src/main.rs"
 
 [dependencies]
-oxml = "0.0.10"
-oxml-json = "0.0.10"
+oxml = "=0.0.11"
+oxml-json = "=0.0.11"
 
 [lints.rust]
 missing_docs = "warn"

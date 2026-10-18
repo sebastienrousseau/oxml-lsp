@@ -5,11 +5,8 @@
 //! editor.
 //!
 //! Run with a path to analyse a file and print diagnostics in a form
-//! a person or a linter can read. The language-server transport is
-//! deliberately not implemented yet: the analysis in [`oxml_lsp`] is
-//! the part worth having, and wiring it to LSP's JSON-RPC framing is
-//! plumbing that should follow a decision about which client to
-//! target first.
+//! a person or a linter can read. `--stdio` runs the language-server
+//! transport. Both entry points use the same analysis library.
 
 #![forbid(unsafe_code)]
 
@@ -41,31 +38,26 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let source = if let Some(path) = args.first() {
-        match std::fs::read_to_string(path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("oxml-lsp: cannot read {path}: {e}");
-                return ExitCode::from(2);
-            }
-        }
-    } else {
-        let mut buf = String::new();
-        if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
-            eprintln!("oxml-lsp: cannot read stdin: {e}");
+    let source = match read_source(args.first().map(String::as_str)) {
+        Ok(source) => source,
+        Err(error) => {
+            eprintln!("oxml-lsp: {error}");
             return ExitCode::from(2);
         }
-        buf
     };
 
     let diagnostics = oxml_lsp::analyse(&source);
+    display_diagnostics(&diagnostics)
+}
+
+fn display_diagnostics(diagnostics: &[oxml_lsp::Diagnostic]) -> ExitCode {
     if diagnostics.is_empty() {
         println!("no diagnostics");
         return ExitCode::SUCCESS;
     }
 
     let mut had_error = false;
-    for d in &diagnostics {
+    for d in diagnostics {
         let label = match d.severity {
             oxml_lsp::Severity::Error => {
                 had_error = true;
@@ -89,4 +81,29 @@ fn main() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn read_source(path: Option<&str>) -> Result<String, String> {
+    if let Some(path) = path {
+        let file = std::fs::File::open(path)
+            .map_err(|error| format!("cannot read {path}: {error}"))?;
+        read_bounded(file)
+            .map_err(|error| format!("cannot read {path}: {error}"))
+    } else {
+        read_bounded(std::io::stdin().lock())
+            .map_err(|error| format!("cannot read stdin: {error}"))
+    }
+}
+
+fn read_bounded(input: impl std::io::Read) -> Result<String, String> {
+    const LIMIT: usize = 8 * 1024 * 1024;
+    let mut source = String::new();
+    let _ = input
+        .take((LIMIT + 1) as u64)
+        .read_to_string(&mut source)
+        .map_err(|error| error.to_string())?;
+    if source.len() > LIMIT {
+        return Err("XML source limit exceeded (8 MiB)".to_owned());
+    }
+    Ok(source)
 }

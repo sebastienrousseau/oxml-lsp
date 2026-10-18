@@ -32,11 +32,12 @@
 //! those differ, and a server that counts characters desynchronises the
 //! stream on the first non-ASCII message it sends.
 
-use std::collections::HashMap;
 use std::io::{BufRead, Write};
 
 use crate::{Severity, analyse};
 use oxml_json::{self as json, Json};
+
+mod positions;
 
 /// Serve the protocol over a byte stream until the client exits.
 ///
@@ -72,11 +73,10 @@ pub fn serve<R: BufRead, W: Write>(input: R, mut output: W) {
 }
 
 /// One connection's state.
+///
+/// Full-document notifications carry their current text. No request
+/// reads an older document, so document text is not retained here.
 struct Server {
-    /// Open documents by URI. The client owns the text; the server
-    /// keeps a copy because `didChange` sends the new content and
-    /// diagnostics are computed from it.
-    documents: HashMap<String, String>,
     /// Set by `exit`.
     exited: bool,
     /// Set by `shutdown`. A request after it is an error per the
@@ -87,7 +87,6 @@ struct Server {
 impl Server {
     fn new() -> Self {
         Self {
-            documents: HashMap::new(),
             exited: false,
             shutting_down: false,
         }
@@ -100,8 +99,22 @@ impl Server {
     /// — so this returns a list rather than an `Option`.
     fn handle(&mut self, request: &Json) -> Vec<Json> {
         let method = request.get("method").and_then(Json::as_str).unwrap_or("");
-        let id = request.get("id").cloned().unwrap_or(Json::Null);
+        let Some(id) = request_id(request) else {
+            return vec![error_response(
+                &Json::Null,
+                -32600,
+                "invalid request id",
+            )];
+        };
         let params = request.get("params");
+
+        if self.shutting_down && method != "exit" {
+            return if request.get("id").is_some() {
+                vec![error_response(&id, -32600, "server is shutting down")]
+            } else {
+                Vec::new()
+            };
+        }
 
         match method {
             "initialize" => vec![ok_response(&id, initialize_result())],
@@ -114,36 +127,55 @@ impl Server {
                 self.exited = true;
                 Vec::new()
             }
-            "textDocument/didOpen" => {
-                let Some((uri, text)) = document_from_open(params) else {
-                    return Vec::new();
-                };
-                let _ = self.documents.insert(uri.clone(), text.clone());
-                vec![diagnostics_notification(&uri, &text)]
-            }
-            "textDocument/didChange" => {
-                let Some((uri, text)) = document_from_change(params) else {
-                    return Vec::new();
-                };
-                let _ = self.documents.insert(uri.clone(), text.clone());
-                vec![diagnostics_notification(&uri, &text)]
-            }
-            "textDocument/didClose" => {
-                if let Some(uri) = uri_of(params) {
-                    let _ = self.documents.remove(&uri);
-                    // Clear the client's diagnostics for a document it
-                    // no longer has open; otherwise stale squiggles
-                    // outlive the file.
-                    return vec![publish(&uri, Vec::new())];
-                }
-                Vec::new()
-            }
-            // An unknown *notification* draws nothing; an unknown
-            // *request* has an id and must be answered, or the client
-            // waits for a reply that never comes.
-            _ if matches!(id, Json::Null) => Vec::new(),
-            _ => vec![error_response(&id, -32601, "method not found")],
+            _ => document_message(method, params, &id),
         }
+    }
+}
+
+fn request_id(request: &Json) -> Option<Json> {
+    match request.get("id") {
+        None => Some(Json::Null),
+        Some(id @ (Json::String(_) | Json::Number(_) | Json::Null)) => {
+            Some(id.clone())
+        }
+        // Reject before cloning: invalid collection IDs must not turn
+        // the serializer into an untrusted response-expansion path.
+        _ => None,
+    }
+}
+
+fn document_message(
+    method: &str,
+    params: Option<&Json>,
+    id: &Json,
+) -> Vec<Json> {
+    match method {
+        "textDocument/didOpen" => {
+            let Some((uri, text)) = document_from_open(params) else {
+                return Vec::new();
+            };
+            vec![diagnostics_notification(&uri, &text)]
+        }
+        "textDocument/didChange" => {
+            let Some((uri, text)) = document_from_change(params) else {
+                return Vec::new();
+            };
+            vec![diagnostics_notification(&uri, &text)]
+        }
+        "textDocument/didClose" => {
+            if let Some(uri) = uri_of(params) {
+                // Clear the client's diagnostics for a document it
+                // no longer has open; otherwise stale squiggles
+                // outlive the file.
+                return vec![publish(&uri, Vec::new())];
+            }
+            Vec::new()
+        }
+        // An unknown *notification* draws nothing; an unknown
+        // *request* has an id and must be answered, or the client
+        // waits for a reply that never comes.
+        _ if matches!(id, Json::Null) => Vec::new(),
+        _ => vec![error_response(id, -32601, "method not found")],
     }
 }
 
@@ -163,7 +195,9 @@ fn initialize_result() -> Json {
 
 /// The `publishDiagnostics` notification for a document.
 fn diagnostics_notification(uri: &str, text: &str) -> Json {
-    let diagnostics = analyse(text)
+    let mut diagnostics = analyse(text);
+    positions::utf16(text, &mut diagnostics);
+    let diagnostics = diagnostics
         .into_iter()
         .map(|d| {
             Json::object(vec![
@@ -278,33 +312,47 @@ fn error_response(id: &Json, code: i32, message: &str) -> Json {
 /// client sending a header this does not know about is not a client
 /// worth disconnecting.
 fn read_message<R: BufRead>(reader: &mut R) -> Option<String> {
+    let length = read_header_length(reader);
+    // A message with no Content-Length cannot be read: there is no
+    // other delimiter in the protocol.
+    // Refuse a hostile length before allocating its body. Headers are
+    // independently bounded so read_line cannot grow without a delimiter.
+    let length = length.filter(|size| *size <= 16 * 1024 * 1024)?;
+    let mut body = vec![0_u8; length];
+    reader.read_exact(&mut body).ok()?;
+    String::from_utf8(body).ok()
+}
+
+fn read_header_length<R: BufRead>(reader: &mut R) -> Option<usize> {
     let mut length: Option<usize> = None;
+    let mut remaining_header_bytes = 8192_usize;
 
     loop {
         let mut line = String::new();
-        match reader.read_line(&mut line) {
+        let mut bounded = std::io::Read::take(
+            &mut *reader,
+            (remaining_header_bytes + 1) as u64,
+        );
+        match bounded.read_line(&mut line) {
             // End of input and a broken pipe are the same thing here:
             // the client is gone and there is no message to read.
             Ok(0) | Err(_) => return None,
             Ok(_) => {}
         }
+        remaining_header_bytes =
+            remaining_header_bytes.checked_sub(line.len())?;
         let trimmed = line.trim_end_matches(['\r', '\n']);
         if trimmed.is_empty() {
             break;
         }
-        if let Some((name, value)) = trimmed.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                length = value.trim().parse().ok();
-            }
+        if let Some((name, value)) = trimmed.split_once(':')
+            && name.trim().eq_ignore_ascii_case("content-length")
+        {
+            length = value.trim().parse().ok();
         }
     }
 
-    // A message with no Content-Length cannot be read: there is no
-    // other delimiter in the protocol.
-    let length = length?;
-    let mut body = vec![0_u8; length];
-    reader.read_exact(&mut body).ok()?;
-    String::from_utf8(body).ok()
+    length
 }
 
 /// Write one framed message.

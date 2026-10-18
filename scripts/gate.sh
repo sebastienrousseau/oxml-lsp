@@ -14,7 +14,7 @@ set -uo pipefail
 # the caller's. `git rev-parse` reads the *current* directory, so
 # running this by absolute path from anywhere else failed with
 # "fatal: not a git repository".
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 
 # The toolchain is named explicitly rather than left to
 # `rust-toolchain.toml`. A `RUSTUP_TOOLCHAIN` in the environment
@@ -23,7 +23,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # how a clippy lint that exists in 1.98 and not in 1.97 made a green
 # local run and a red CI one.
 export TOOLCHAIN="${OXML_LSP_TOOLCHAIN:-1.98.0}"
-MSRV="${OXML_LSP_MSRV:-1.86.0}"
+MSRV="${OXML_LSP_MSRV:-1.89.0}"
 # CI sets this for every job, so a warning there is a failure. Setting
 # it here is what makes this script predict CI rather than approximate
 # it.
@@ -48,6 +48,12 @@ step() {
 # a `git add -A` will commit it. `.gitignore` does not help once a path
 # is tracked, and CI then cannot create its build directory on top of
 # it -- every build job fails until it is removed.
+step "publish helper contract" python3 scripts/test-publish-dry-run.py
+step "release workflow contract" python3 scripts/test-release-workflow.py
+step "fuzz license policy" python3 scripts/test-fuzz-license-policy.py
+step "release trust contract" python3 scripts/test-release-trust.py
+step "example coverage contract" python3 scripts/test-example-coverage.py
+step "Scorecard policy" python3 scripts/test-scorecard-policy.py
 step "no tracked build dir" bash -c '! git ls-files | grep -qx target'
 step "fmt"            cargo "+$TOOLCHAIN" fmt --all --check
 step "clippy"         cargo "+$TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
@@ -60,13 +66,16 @@ step "forbid unsafe" bash -c '
     echo "#![forbid(unsafe_code)] is missing"; exit 1; }'
 # `lint.sh` asserts its output and says so in its own header; nothing
 # ran it until 0.0.7.
-step "examples" bash -c '
+step "examples" bash -s <<'EXAMPLES'
   cargo "+$TOOLCHAIN" build --release >/dev/null &&
   OXML_LSP="$PWD/target/release/oxml-lsp" ./examples/lint.sh &&
   cargo "+$TOOLCHAIN" run --quiet --example library >/dev/null &&
-  cargo "+$TOOLCHAIN" run --quiet --example lint_a_document >/dev/null'
-step "examples cover the API" python3 ./scripts/check-example-coverage.py
-step "coverage 95%" cargo "+$TOOLCHAIN" llvm-cov --all-features --fail-under-lines 95 \
+  cargo "+$TOOLCHAIN" run --quiet --example lint_a_document >/dev/null
+EXAMPLES
+# Example instrumentation uses absolute paths; suite coverage remaps them.
+# Mixing the two mappings makes LLVM report executed library code as uncovered.
+step "examples cover the API" env CARGO_LLVM_COV_TARGET_DIR="${CARGO_LLVM_COV_TARGET_DIR:-$PWD/target/llvm-cov-target}-examples" python3 ./scripts/check-example-coverage.py
+step "coverage 95%" cargo "+$TOOLCHAIN" llvm-cov --remap-path-prefix --all-features --fail-under-lines 95 \
   --ignore-filename-regex 'builds/cargo/package'
 # What `cargo publish` would upload, and whether the assurance case in
 # it describes this crate. oxml-json 0.0.8 shipped one inherited from

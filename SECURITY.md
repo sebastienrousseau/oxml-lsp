@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-oxml is pre-1.0. Only the most recent `0.0.x` release receives security
+oxml-lsp is pre-1.0. Only the most recent `0.0.x` release receives security
 fixes.
 
 ## Reporting a vulnerability
@@ -16,24 +16,19 @@ You should get an acknowledgement within 72 hours.
 
 ## Threat model
 
-XML parsers have a well-known attack surface, and oxml's design
-forecloses most of it rather than mitigating it:
+The stdio transport accepts client-controlled JSON messages. Headers
+are capped at 8 KiB and bodies at 16 MiB before body allocation. The shared
+JSON parser also limits source size and nesting. Analysis uses the strict
+core XML profile, including an 8 MiB source/decoded-document limit.
 
-**Entity expansion (XXE, billion laughs).** oxml resolves only the five
-predefined entities and numeric character references. External and
-custom entities are *not* resolved — a document declaring
-`<!ENTITY xxe SYSTEM "file:///etc/passwd">` is rejected rather than
-expanded. There is no option to enable it, so there is no way to
-configure the vulnerability back in.
+Internal entities may expand within core budgets. The parser does not
+automatically fetch external entities or documents. Diagnostic positions
+and messages are data, not executable commands. Editor clients and the
+launching process remain separate trust boundaries.
 
-**Unbounded recursion.** Deeply nested documents are parsed with
-recursion. Extremely deep input can exhaust the stack; if you parse
-untrusted documents of unbounded depth, run the parse on a thread with
-a known stack size.
-
-**Memory safety.** `#![forbid(unsafe_code)]` is enforced at compile
-time, so the class of memory-corruption bugs that has historically
-affected C XML parsers cannot occur here.
+**Memory safety.** This crate forbids unsafe Rust in its own source.
+Dependencies and runtimes have separate safety obligations. This
+does not rule out resource exhaustion, logic defects or protocol errors.
 
 ## What is not a vulnerability
 
