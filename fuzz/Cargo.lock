@@ -72,10 +72,14 @@ dependencies = [
 [[package]]
 name = "oxml"
 version = "0.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a87b5208e19be9156660b4cf008a2b7b864502dbe5c3833dc47155fd2d4ea14"
 
 [[package]]
 name = "oxml-json"
 version = "0.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98c450a089199a011851393b67445c024888a964f9e585baa6aa5bdbe064cdad"
 
 [[package]]
 name = "oxml-lsp"
