@@ -88,14 +88,14 @@ go-to-definition, or schema validation.
 ## Install
 
 ```bash
-cargo install oxml-lsp --version 0.0.12 --locked
+cargo install oxml-lsp --version 0.0.13 --locked
 ```
 
 As a library:
 
 ```toml
 [dependencies]
-oxml-lsp = "0.0.12"
+oxml-lsp = "0.0.13"
 ```
 
 ## Quick Start
