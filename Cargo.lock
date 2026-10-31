@@ -10,13 +10,13 @@ checksum = "099a65b3139999c480e6e8973c2c7ddba41be2acda6fc9375a5569f072d7aa93"
 
 [[package]]
 name = "oxml-json"
-version = "0.0.11"
+version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98c450a089199a011851393b67445c024888a964f9e585baa6aa5bdbe064cdad"
+checksum = "1196df6be597aa0c4443555a55d2cce4d91de6861efc2691e83ff61586d8d7f9"
 
 [[package]]
 name = "oxml-lsp"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "oxml",
  "oxml-json",
