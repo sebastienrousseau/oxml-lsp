@@ -1,6 +1,6 @@
 [package]
 name = "oxml-lsp"
-version = "0.0.13"
+version = "0.0.14"
 edition = "2024"
 rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
@@ -44,8 +44,8 @@ name = "oxml-lsp"
 path = "src/main.rs"
 
 [dependencies]
-oxml = "=0.0.12"
-oxml-json = "=0.0.12"
+oxml = "=0.0.13"
+oxml-json = "=0.0.13"
 
 [lints.rust]
 missing_docs = "warn"
